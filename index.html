@@ -100,6 +100,19 @@ body.onboarding-active.tour-workspace-step main>.crumb{visibility:hidden}
  main>.crumb>.crumb-button,main>.crumb>.sep,main>.crumb>.crumb-reset{flex:0 0 auto;white-space:nowrap;max-width:none}
  main>.crumb .crumb-button span{white-space:nowrap}
 }
+
+/* Mobile overlays own the viewport; only their content can scroll. */
+@media(max-width:700px){
+ #guide,#sqlLookup{position:fixed;inset:auto!important;left:var(--overlay-left,0px)!important;top:var(--overlay-top,0px)!important;width:var(--overlay-width,100vw)!important;height:var(--overlay-height,100dvh)!important;max-width:none!important;max-height:none!important;margin:0!important;border:0!important;box-shadow:none!important;overflow:hidden;overscroll-behavior:none}
+ #guide .dialog-head,#sqlLookup .dialog-head{padding:16px 20px;flex-shrink:0}
+ #sqlLookup .lookup-results{flex:1;min-height:0;overscroll-behavior:none;padding-bottom:max(20px,env(safe-area-inset-bottom))}
+ #guide [role=tabpanel]{overscroll-behavior:none}
+ body:not(.db-collapsed) .database{position:fixed;left:0;right:0;top:0;width:100%;height:100dvh;display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none}
+ .database .db-toolbar{flex:0 0 55px}
+ #dbBody{flex:1;min-height:0;height:auto;overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+ html.mobile-overlay-open{overflow:hidden;overscroll-behavior:none}
+ body.mobile-overlay-locked{position:fixed;left:0;right:0;width:100%;overflow:hidden;overscroll-behavior:none}
+}
 </style><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"><style id="lcd-theme">
 /* =============================================================
    LCD PIXEL THEME v4 — 원본 CSS/JS 뒤에서 표면만 덮어씀
@@ -1665,4 +1678,33 @@ if(document.modelContext?.registerTool){const life=new AbortController();for(con
     }catch{}
   };
 })();
-</script></body></html>
+</script>
+<script>
+// Lock the background for both native dialogs and the mobile database drawer.
+(()=>{
+ let locked=false,savedY=0,savedX=0,oldTop='';
+ const mobile=matchMedia('(max-width:700px)');
+ function viewport(){
+  const v=window.visualViewport,root=document.documentElement.style;
+  root.setProperty('--overlay-left',(v?.offsetLeft||0)+'px');
+  root.setProperty('--overlay-top',(v?.offsetTop||0)+'px');
+  root.setProperty('--overlay-width',(v?.width||innerWidth)+'px');
+  root.setProperty('--overlay-height',(v?.height||innerHeight)+'px');
+ }
+ function sync(){
+  const active=mobile.matches&&(!document.body.classList.contains('db-collapsed')||!!document.querySelector('#guide[open],#sqlLookup[open]'));
+  if(active&&!locked){
+   savedX=scrollX;savedY=scrollY;oldTop=document.body.style.top;locked=true;
+   document.body.style.top=-savedY+'px';document.body.classList.add('mobile-overlay-locked');document.documentElement.classList.add('mobile-overlay-open');
+  }else if(!active&&locked){
+   locked=false;document.body.classList.remove('mobile-overlay-locked');document.documentElement.classList.remove('mobile-overlay-open');document.body.style.top=oldTop;
+   window.scrollTo({left:savedX,top:savedY,behavior:'instant'});
+  }
+  viewport();
+ }
+ new MutationObserver(sync).observe(document.body,{attributes:true,attributeFilter:['class','open'],subtree:true});
+ addEventListener('resize',sync);window.visualViewport?.addEventListener('resize',viewport);window.visualViewport?.addEventListener('scroll',viewport);
+ mobile.addEventListener('change',sync);sync();
+})();
+</script>
+</body></html>

@@ -1617,9 +1617,9 @@ if(document.modelContext?.registerTool){const life=new AbortController();for(con
         const label=document.createElement('span');label.className='crumb-label';
         while(btn.firstChild)label.appendChild(btn.firstChild);btn.appendChild(label);
         const st=document.createElement('span');st.className='crumb-status'+(done?' is-done':'');
-        st.innerHTML=done?chk+'완료':(depth===2?'':`${d}/${n}`);
+        st.innerHTML=done?chk+'완료':'';
         btn.appendChild(st);
-        btn.setAttribute('aria-label',label.textContent+(done?', 완료':depth===2?', 미완료':`, ${n}문제 중 ${d}문제 완료`));
+        btn.setAttribute('aria-label',label.textContent+(done?', 완료':''));
       });
     }catch{}
   };

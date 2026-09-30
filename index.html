@@ -60,6 +60,7 @@
 .onboarding-active{overflow:hidden}
 .onboarding-active .concept-note:not(.tour-note){visibility:hidden}
 .onboarding-active .concept-note.tour-note{max-height:190px!important}
+body.onboarding-active.tour-workspace-step main>.crumb{visibility:hidden}
 #onboarding{position:fixed;inset:0;z-index:1000;pointer-events:none}
 .tour-mask{position:fixed;background:rgba(26,33,45,.24);pointer-events:auto;touch-action:none}
 #tourSpot{position:fixed;border:2px solid #315de5;border-radius:9px;box-shadow:0 0 0 3px #ffffffa6;pointer-events:none}
@@ -91,6 +92,14 @@
 @keyframes submit-border-flow{from{background-position:0 0,0% 50%}to{background-position:0 0,100% 50%}}
 @media(prefers-reduced-motion:reduce){.actions #grade.submit-ready{animation:none;background-position:0 0,50% 50%}}
 
+
+/* Mobile breadcrumbs: one continuous row with native horizontal swipe. */
+@media(max-width:700px){
+ main>.crumb{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scroll-padding-inline:14px}
+ main>.crumb::-webkit-scrollbar{display:none}
+ main>.crumb>.crumb-button,main>.crumb>.sep,main>.crumb>.crumb-reset{flex:0 0 auto;white-space:nowrap;max-width:none}
+ main>.crumb .crumb-button span{white-space:nowrap}
+}
 </style><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"><style id="lcd-theme">
 /* =============================================================
    LCD PIXEL THEME v4 — 원본 CSS/JS 뒤에서 표면만 덮어씀
@@ -803,6 +812,11 @@ function positionCrumbLayer(){
 function openCrumbLayer(depth){
  if(busy||!crumbOptions(depth).length)return;
  closeCrumbLayer();openCrumbDepth=depth;
+ if(innerWidth<=700){
+  const row=$('crumb'),item=$('crumb-'+depth),r=row.getBoundingClientRect(),b=item.getBoundingClientRect();
+  if(b.left<r.left+14)row.scrollLeft+=b.left-r.left-14;
+  else if(b.right>r.right-14)row.scrollLeft+=Math.min(b.right-r.right+14,b.left-r.left-14);
+ }
  const layer=$('crumbLayer');layer.setAttribute('aria-label',crumbNames[depth]+' 목록');
  layer.innerHTML=crumbOptions(depth).map(o=>`<button type="button" role="option" aria-selected="${pendingPath[depth]===o.value}" data-value="${o.value}">${esc(o.label)}</button>`).join('');
  layer.hidden=false;$('crumb-'+depth).setAttribute('aria-expanded','true');positionCrumbLayer();
@@ -827,6 +841,7 @@ function closeHint(){$('hintLayer').hidden=true;$('hint').setAttribute('aria-exp
 document.addEventListener('click',e=>{if(!e.target.closest('#crumb')&&!e.target.closest('#crumbLayer'))closeCrumbLayer();if(!e.target.closest('.actions'))closeHint()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCrumbLayer(true);closeHint()}});
 addEventListener('scroll',positionCrumbLayer,{passive:true});
+$('crumb').addEventListener('scroll',positionCrumbLayer,{passive:true});
 const desktopDB=matchMedia('(min-width:701px)');let dbWidth=Number(stored.dbWidth)||340;
 function resizeDB(width){const max=Math.min(560,Math.max(280,innerWidth*.45));dbWidth=Math.round(Math.max(280,Math.min(max,width)));document.documentElement.style.setProperty('--rnb',dbWidth+'px');$('dbResize').setAttribute('aria-valuenow',dbWidth);$('dbResize').setAttribute('aria-valuemax',Math.round(max))}
 $('dbResize').onpointerdown=e=>{if(!desktopDB.matches||collapsed)return;e.preventDefault();const handle=e.currentTarget;handle.setPointerCapture(e.pointerId);handle.onpointermove=m=>resizeDB(innerWidth-m.clientX);handle.onpointerup=()=>{handle.onpointermove=null;save()};handle.onpointercancel=()=>{handle.onpointermove=null}};
@@ -1066,7 +1081,7 @@ function startOnboarding(){
 }
 function finishOnboarding(){
  onboarding.active=false;onboardingDone=true;$('onboarding').hidden=true;
- document.body.classList.remove('onboarding-active');
+ document.body.classList.remove('onboarding-active');document.body.classList.remove('tour-workspace-step');
  $('conceptNote').classList.remove('tour-note');$('editor').readOnly=false;
  collapsed=onboarding.originalCollapsed;setDatabase();
  closeCrumbLayer();closeHint();stopFeedbackSpeech(true);clearCelebration();
@@ -1081,6 +1096,8 @@ function advanceTour(){
 function enterTourStep(){
  if(!onboarding.active)return;
  const step=tourStep();onboarding.notice='';closeSuggestions();
+ document.body.classList.toggle('tour-workspace-step',!['breadcrumb','chapter-choice','lesson-choice','task-choice'].includes(step.id));
+ if(step.mode!=='type'&&document.activeElement===$('editor'))$('editor').blur();
  $('conceptNote').classList.toggle('tour-note',step.id==='note');
  if(step.id==='database'){
   collapsed=false;setDatabase();const users=document.querySelector('.table-schema[data-name="users"]');if(users)users.open=true;
@@ -1104,7 +1121,7 @@ function enterTourStep(){
    $('editor').focus({preventScroll:true});$('editor').setSelectionRange($('editor').value.length,$('editor').value.length);
   }else if(step.next)$('tourNext').focus({preventScroll:true});
   else (tourAllowedElements()[0]||$('tourBubble')).focus({preventScroll:true});
-  positionTour();
+  revealTourTarget();positionTour();
  });
 }
 function renderTourBubble(){
@@ -1201,43 +1218,67 @@ function onboardingPathSelected(depth){
  if(!onboarding.active)return;
  if((depth===0&&tourStep().id==='chapter-choice')||(depth===1&&tourStep().id==='lesson-choice'))advanceTour();
 }
+// All geometry stays in layout-viewport CSS pixels, like getBoundingClientRect.
+// visualViewport offsets define the visible bounds; never subtract page scroll twice.
+function tourTargetRect(){
+ const step=tourStep(),target=document.querySelector(step.target);if(!target)return null;
+ const r=target.getBoundingClientRect();
+ const height=step.mode==='type'?Math.min(r.height,76):step.target==='.editor-panel'?Math.min(r.height,170):r.height;
+ return {left:r.left,top:r.top,right:r.right,bottom:r.top+height,width:r.width,height};
+}
+function revealTourTarget(){
+ if(!onboarding.active||['choice','drag'].includes(tourStep().mode))return;
+ const r=tourTargetRect(),v=noteViewport();if(!r)return;
+ // Leave room above the target and below it for a compact, scrollable bubble.
+ const available=Math.max(44,Math.min(r.height,v.height-120));
+ const top=v.top+16,bottom=v.top+v.height-100;
+ if(r.top<top||r.top+available>bottom)window.scrollBy({top:r.top-top,behavior:'instant'});
+}
+let tourLayoutFrame=0;
+function scheduleTourLayout(){
+ if(!onboarding.active||tourLayoutFrame)return;
+ tourLayoutFrame=requestAnimationFrame(()=>{tourLayoutFrame=0;if(['type','click'].includes(tourStep().mode))revealTourTarget();positionTour()});
+}
 function positionTour(){
  if(!onboarding.active)return;
- const step=tourStep(),target=document.querySelector(step.target);if(!target)return;
- const v=noteViewport(),r=target.getBoundingClientRect(),pad=6;
- let height=r.height;
- if(step.mode==='type')height=Math.min(height,76);
- else if(step.target==='.editor-panel')height=Math.min(height,170);
- const x=Math.max(v.left+4,r.left-pad),y=Math.max(v.top+4,r.top-pad);
- const right=Math.min(v.left+v.width-4,r.right+pad),bottom=Math.min(v.top+v.height-4,r.top+height+pad);
- const w=Math.max(0,right-x),h=Math.max(0,bottom-y);
- const style=(id,box)=>Object.assign($(id).style,box);
- // Keep the result outline on the actual panel edges, even when part is offscreen.
- const spot=step.target==='#resultPanel'?{left:r.left-pad,top:r.top-pad,width:r.width+pad*2,height:r.height+pad*2}:{left:x,top:y,width:w,height:h};
- style('tourSpot',{left:spot.left+'px',top:spot.top+'px',width:spot.width+'px',height:spot.height+'px'});
- style('tourMaskTop',{left:0,top:0,width:'100%',height:Math.max(0,y)+'px'});
- style('tourMaskBottom',{left:0,top:Math.max(y,bottom)+'px',width:'100%',bottom:0});
+ const step=tourStep(),r=tourTargetRect();if(!r)return;
+ const v=noteViewport(),pad=6,edge=8,gap=12;
+ const clamp=(n,a,b)=>Math.max(a,Math.min(n,b));
+ const x=clamp(r.left-pad,v.left,v.left+v.width),y=clamp(r.top-pad,v.top,v.top+v.height);
+ const right=clamp(r.right+pad,x,v.left+v.width),bottom=clamp(r.bottom+pad,y,v.top+v.height);
+ const w=right-x,h=bottom-y,style=(id,box)=>Object.assign($(id).style,box);
+ // Outline the actual target, not a clamped proxy at the top of the screen.
+ style('tourSpot',{left:(r.left-pad)+'px',top:(r.top-pad)+'px',width:(r.width+2*pad)+'px',height:(r.height+2*pad)+'px'});
+ style('tourMaskTop',{left:0,top:0,width:'100%',height:y+'px'});
+ style('tourMaskBottom',{left:0,top:bottom+'px',width:'100%',bottom:0});
  style('tourMaskLeft',{left:0,top:y+'px',width:x+'px',height:h+'px'});
  style('tourMaskRight',{left:right+'px',right:0,top:y+'px',height:h+'px'});
- const bubble=$('tourBubble');bubble.style.maxHeight=Math.max(140,v.height-24)+'px';
- const b=bubble.getBoundingClientRect(),gap=16;let bx,by;
- if(v.left+v.width-right>b.width+gap+12){bx=right+gap;by=y}
- else if(x-v.left>b.width+gap+12){bx=x-b.width-gap;by=y}
- else if(v.top+v.height-bottom>=b.height+gap+12){bx=x;by=bottom+gap}
- else if(y-v.top>=b.height+gap+12){bx=x;by=y-b.height-gap}
- else{bx=v.left+(v.width-b.width)/2;by=v.top+v.height-b.height-12}
- bx=Math.max(v.left+12,Math.min(bx,v.left+v.width-b.width-12));by=Math.max(v.top+12,Math.min(by,v.top+v.height-b.height-12));
- bubble.style.left=bx+'px';bubble.style.top=by+'px';
- const side=by>=bottom?'top':by+b.height<=y?'bottom':bx>=right?'left':'right';
- bubble.setAttribute('data-arrow',side);
- bubble.style.setProperty('--arrow-x',Math.max(20,Math.min(b.width-20,x+w/2-bx))+'px');
- bubble.style.setProperty('--arrow-y',Math.max(24,Math.min(b.height-24,y+h/2-by))+'px');
- const ax=Math.max(20,Math.min(b.width-20,x+w/2-bx)),ay=Math.max(24,Math.min(b.height-24,y+h/2-by));
+ const bubble=$('tourBubble');
+ bubble.style.width=Math.min(360,v.width-24)+'px';
+ bubble.style.maxHeight=Math.max(0,v.height-2*edge)+'px';
+ let b=bubble.getBoundingClientRect(),bx,by,side;
+ if(v.left+v.width-right>=b.width+gap+edge){bx=right+gap;by=clamp(y,v.top+edge,v.top+v.height-b.height-edge);side='left'}
+ else if(x-v.left>=b.width+gap+edge){bx=x-b.width-gap;by=clamp(y,v.top+edge,v.top+v.height-b.height-edge);side='right'}
+ else{
+  const below=Math.max(0,v.top+v.height-edge-bottom-gap),above=Math.max(0,y-v.top-edge-gap);
+  const useBelow=below>=Math.min(b.height,180)||below>=above;
+  // Shrink the message instead of covering the editor or execution button.
+  bubble.style.maxHeight=(useBelow?below:above)+'px';
+  b=bubble.getBoundingClientRect();bx=clamp(x,v.left+12,v.left+v.width-b.width-12);
+  by=useBelow?bottom+gap:y-gap-b.height;side=useBelow?'top':'bottom';
+  // Large read-only result panels may fill the viewport; keep Next reachable.
+  if(Math.max(above,below)<100&&!['type','click','choice','drag'].includes(step.mode)){
+   bubble.style.maxHeight=Math.max(80,v.height*.5)+'px';b=bubble.getBoundingClientRect();
+   by=v.top+v.height-b.height-edge;side='bottom';
+  }
+ }
+ bubble.style.left=bx+'px';bubble.style.top=by+'px';bubble.setAttribute('data-arrow',side);
+ const ax=clamp(x+w/2-bx,20,b.width-20),ay=clamp(y+h/2-by,20,b.height-20);
  Object.assign($('tourArrow').style,{left:(side==='left'?bx-6:side==='right'?bx+b.width-6:bx+ax-6)+'px',top:(side==='top'?by-6:side==='bottom'?by+b.height-6:by+ay-6)+'px'});
 }
 $('tourNext').onclick=advanceTour;$('tourRestart').onclick=startOnboarding;
-addEventListener('resize',positionTour);addEventListener('scroll',positionTour,{passive:true});
-window.visualViewport?.addEventListener('resize',()=>{if(onboarding.active&&tourStep().mode==='type')$('editor').scrollIntoView({block:'start',behavior:'instant'});requestAnimationFrame(positionTour)});window.visualViewport?.addEventListener('scroll',positionTour);
+addEventListener('resize',scheduleTourLayout);addEventListener('scroll',scheduleTourLayout,{passive:true,capture:true});
+window.visualViewport?.addEventListener('resize',scheduleTourLayout);window.visualViewport?.addEventListener('scroll',scheduleTourLayout);
 new ResizeObserver(positionTour).observe($('tourBubble'));
 
 renderSchema();setDatabase();const initial=Array.isArray(stored.position)&&valid(...stored.position)?stored.position:[0,0,0];select(...initial);
@@ -1554,7 +1595,7 @@ if(document.modelContext?.registerTool){const life=new AbortController();for(con
   f.innerHTML=`<div class="footer-brand"><strong>SQL Tutor</strong>
     <div class="footer-meta"><a class="footer-mail" href="mailto:yoonging97@gmail.com">yoonging97@gmail.com</a>
     <p>© ${new Date().getFullYear()} 최정윤. All rights reserved.</p>
-    <p class="footer-ai">이 서비스의 화면·콘텐츠·코드는 AI(Claude)를 활용해 제작했어요.</p></div></div><span class="footer-logo" aria-hidden="true"></span>`;
+    <p class="footer-ai">이 서비스의 화면·콘텐츠·코드는 AI(Claude, Codex)를 활용해 제작했어요.</p></div></div><span class="footer-logo" aria-hidden="true"></span>`;
   main.append(f);
   f.querySelector('.footer-mail').addEventListener('click',e=>{if(e.currentTarget.dataset.placeholder)e.preventDefault()});
 })();

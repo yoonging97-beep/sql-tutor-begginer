@@ -757,6 +757,20 @@ main>.gnb::after{border-bottom-color:#C9CCC5!important}
 @media(max-width:700px),(pointer:coarse){.editor-label .lookup-button kbd{display:none}}
 #dbToggle,.db-collapsed #dbToggle{top:76px!important} /* 제목줄의 완료 표시를 가리지 않게 브레드크럼 높이로 */
 @media(max-width:700px){main>.crumb{padding-right:52px!important}}
+@media(max-width:700px){.hint-layer:not([hidden]){z-index:46!important}}
+@media(max-width:700px){body:has(#hintLayer:not([hidden])) #dbToggle{visibility:hidden}}
+
+/* 연동 안내 말풍선: PC에서는 버튼 오른쪽(GNB 줄 안)에 띄워 아래 브레드크럼을 가리지 않음 */
+@media(min-width:701px){
+  .gnb .account{flex-direction:row!important;align-items:center!important;gap:12px}
+  .gnb .acct-nudge{position:static!important;margin:0!important;max-width:none!important;width:auto!important;padding:7px 30px 7px 12px!important;font-size:12px!important;white-space:nowrap}
+  .gnb .acct-nudge::before{top:50%!important;left:-5px!important;right:auto!important;transform:translateY(-50%) rotate(45deg)!important}
+  .gnb .acct-nudge-x{top:50%!important;transform:translateY(-50%)}
+}
+.gnb .pc-num b,.gnb .pc-total{font-family:var(--pixel,'SQLT Sans'),'Pretendard',sans-serif!important;font-size:12px!important;line-height:1!important}
+@media(min-width:701px){.gnb .acct-nudge{white-space:normal!important;max-width:340px!important;line-height:1.45!important;padding:5px 28px 5px 10px!important}.gnb .account{flex-shrink:1;min-width:0}.gnb .progress-chip{flex-shrink:0}}
+@media(min-width:701px){.gnb .acct-nudge{position:relative!important}}
+.acct-nudge{word-break:keep-all}
 </style></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><filter id="lcd-bleed" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.45 0.45" numOctaves="1" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -2.2" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="1" seed="3" result="w"/><feDisplacementMap in="broken" in2="w" scale="0.5" xChannelSelector="R" yChannelSelector="G" result="wob"/><feGaussianBlur in="wob" stdDeviation="0.2" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="wob"/></feMerge></filter><filter id="lcd-bleed-fine" x="-5%" y="-20%" width="110%" height="140%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9 0.9" numOctaves="1" seed="11" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -3.9" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feGaussianBlur in="broken" stdDeviation="0.2" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="broken"/></feMerge></filter></defs></svg>
 
 <div class="layout"><main><nav id="crumb" class="crumb" aria-label="현재 학습 위치"></nav><section class="problem"><div class="problem-heading"><div class="problem-title"><h1 id="taskTitle"></h1><button id="guideOpen" class="guide-button">GUIDE</button></div><div class="problem-tools"><span id="taskStatus"></span></div></div><p id="prompt"></p><div id="outputSpec" class="spec"></div></section>
@@ -2191,7 +2205,15 @@ const V02={"concepts": {"SELECT": {"name": "SELECT … FROM", "what": "어떤 �
     fitLayer();
   };
   // 힌트 창이 화면 아래로 넘치지 않도록 남은 높이에 맞추고 내부 스크롤
-  function fitLayer(){const L=$('hintLayer');if(L.hidden)return;L.style.maxHeight='';const top=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(220,innerHeight-top-16)+'px';L.scrollTop=0}
+  function fitLayer(){const L=$('hintLayer');if(L.hidden)return;L.style.maxHeight='';
+    // 모바일 등 좁은 화면: 힌트 창이 입력 패널 밖(화면 오른쪽 끝)으로 삐져나가지 않게 패널 폭 안에 맞춤
+    L.style.left='';L.style.width='';const pn=L.closest('.editor-panel');
+    if(pn){const pr=pn.getBoundingClientRect();let r=L.getBoundingClientRect();
+      if(r.width>pr.width-2){L.style.setProperty('width',(pr.width-2)+'px','important');r=L.getBoundingClientRect()}
+      if(r.right>pr.right-1){const cur=parseFloat(getComputedStyle(L).left)||0;L.style.left=(cur-(r.right-pr.right+1))+'px'}}
+const top=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(220,innerHeight-top-16)+'px';
+    // 온보딩 중에는 힌트 창을 짧게 잘라 말풍선 자리를 남김
+    if(typeof onboarding!=='undefined'&&onboarding.active)L.style.maxHeight=Math.min(parseFloat(L.style.maxHeight),Math.round(innerHeight*0.45))+'px';L.scrollTop=0}
   $('hint').addEventListener('click',()=>requestAnimationFrame(fitLayer));addEventListener('resize',fitLayer);
   function reveal(i){
     const r=rec(),lines=data().answer.split('\n');if(i<r.revealed)return;
@@ -2303,16 +2325,16 @@ const V02={"concepts": {"SELECT": {"name": "SELECT … FROM", "what": "어떤 �
 
   /* UI: 우측 상단 계정 영역 + 로그인 유도 말풍선 */
   const box=document.createElement('div');box.className='account';
-  box.innerHTML=`<button type="button" class="acct-login"><svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.2 5.6c4.2-3.9 7.1-9.6 7.1-16.9z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.2-5.6c-2 1.4-4.7 2.3-8.7 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg><span>Google 로그인</span></button>
+  box.innerHTML=`<button type="button" class="acct-login"><svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.2 5.6c4.2-3.9 7.1-9.6 7.1-16.9z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.2-5.6c-2 1.4-4.7 2.3-8.7 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg><span>구글 계정과 연동하기</span></button>
   <div class="acct-user" hidden><button type="button" class="acct-me" aria-haspopup="menu" aria-expanded="false"><span class="acct-avatar"></span><span class="acct-sync" aria-live="polite"></span></button>
-  <div class="acct-menu" role="menu" hidden><p class="acct-name"></p><p class="acct-mail"></p><p class="acct-note">학습 진도가 이 계정에 저장돼요.</p><button type="button" role="menuitem" class="acct-out">로그아웃</button></div></div>
-  <div class="acct-nudge" role="note" hidden><p>Google 계정으로 로그인하면 <b>어디서든 학습을 이어서</b> 할 수 있어요.</p><button type="button" class="acct-nudge-x" aria-label="안내 닫기">×</button></div>`;
+  <div class="acct-menu" role="menu" hidden><p class="acct-name"></p><p class="acct-mail"></p><p class="acct-note">학습 진도가 이 계정에도 저장돼요. 연동을 해제해도 이 브라우저의 기록은 그대로 남아요.</p><button type="button" role="menuitem" class="acct-out">연동 해제</button></div></div>
+  <div class="acct-nudge" role="note" hidden><p>연동하지 않아도 모든 기능을 쓸 수 있어요. 연동하면 <b>다른 기기에서도 이어서</b> 학습할 수 있어요.</p><button type="button" class="acct-nudge-x" aria-label="안내 닫기">×</button></div>`;
   const gnb=document.createElement('header');gnb.className='gnb';gnb.appendChild(box);
   const pc=document.querySelector('.progress-chip');if(pc)gnb.append(pc);
   document.querySelector('main').prepend(gnb);
   const btn=box.querySelector('.acct-login'),userEl=box.querySelector('.acct-user'),nudge=box.querySelector('.acct-nudge'),menu=box.querySelector('.acct-menu'),me=box.querySelector('.acct-me'),syncEl=box.querySelector('.acct-sync');
-  let closed=false;try{closed=localStorage.getItem(NUDGE)==='1'}catch{}
-  const showNudge=on=>{nudge.hidden=!on||closed||(typeof onboarding!=='undefined'&&onboarding.active);requestAnimationFrame(()=>{try{positionConceptNote()}catch{}})};
+  let closed=false,nudgeAway=false;try{closed=localStorage.getItem(NUDGE)==='1'}catch{}
+  const showNudge=on=>{nudge.hidden=!on||closed||nudgeAway||(typeof onboarding!=='undefined'&&onboarding.active);requestAnimationFrame(()=>{try{positionConceptNote()}catch{}})};
   box.querySelector('.acct-nudge-x').onclick=()=>{closed=true;try{localStorage.setItem(NUDGE,'1')}catch{}showNudge(false)};
   me.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;me.setAttribute('aria-expanded',String(!menu.hidden))};
   document.addEventListener('click',e=>{if(!menu.hidden&&!box.contains(e.target)){menu.hidden=true;me.setAttribute('aria-expanded','false')}});
@@ -2388,11 +2410,14 @@ const V02={"concepts": {"SELECT": {"name": "SELECT … FROM", "what": "어떤 �
     btn.disabled=true;const label=btn.querySelector('span');label.textContent='여는 중…';
     try{await boot();const p=fb.google();
       try{await fb.auth.signInWithPopup(p)}catch(e){if(/popup|blocked|cancelled-popup/i.test(e.code||e.message||''))await fb.auth.signInWithRedirect(p);else throw e}
-    }catch(e){label.textContent='로그인 실패 — 다시 시도';setTimeout(()=>{label.textContent='Google 로그인'},2500)}
-    finally{btn.disabled=false;if(label.textContent==='여는 중…')label.textContent='Google 로그인'}
+    }catch(e){label.textContent='연동 실패 — 다시 시도';setTimeout(()=>{label.textContent='구글 계정과 연동하기'},2500)}
+    finally{btn.disabled=false;if(label.textContent==='여는 중…')label.textContent='구글 계정과 연동하기'}
   };
   box.querySelector('.acct-out').onclick=async()=>{menu.hidden=true;push();try{await fb.auth.signOut()}catch{}};
   showNudge(true);
+  const away=e=>{if(nudge.hidden||nudgeAway)return;if(e&&e.target&&nudge.contains(e.target))return;nudgeAway=true;nudge.hidden=true};
+  document.addEventListener('pointerdown',away,true);
+  if(matchMedia('(max-width:700px)').matches)setTimeout(()=>away(),8000); // 모바일: 브레드크럼을 오래 가리지 않게 8초 뒤 자동으로 접힘addEventListener('scroll',()=>away(),{passive:true});
   // 이미 로그인한 적이 있으면 조용히 SDK를 불러와 로그인 상태 복원
   try{if(Object.keys(localStorage).some(k=>k.startsWith('firebase:authUser:')))boot().catch(()=>{})}catch{}
   window.__sqltAuth={boot,onUser,merge,local};
@@ -2403,5 +2428,23 @@ const V02={"concepts": {"SELECT": {"name": "SELECT … FROM", "what": "어떤 �
   const f=document.createElementNS(ns,'filter');f.id='lcd-bleed-strong';['x','y','width','height'].forEach((k,i)=>f.setAttribute(k,['-5%','-50%','110%','200%'][i]));f.setAttribute('color-interpolation-filters','sRGB');
   f.innerHTML='<feTurbulence type="fractalNoise" baseFrequency="0.5 0.9" numOctaves="2" seed="11" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -2.7" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="1" seed="5" result="w"/><feDisplacementMap in="broken" in2="w" scale="0.9" xChannelSelector="R" yChannelSelector="G"/>';
   defs.appendChild(f)})();
+
+/* 온보딩 스포트라이트: 레이아웃이 바뀌면(브레드크럼 숨김·폰트 로딩·패널 크기) 다시 계산 */
+(()=>{if(typeof scheduleTourLayout!=='function'||typeof onboarding==='undefined')return;
+  const re=()=>{if(onboarding.active)scheduleTourLayout()};
+  const ro=new ResizeObserver(re);['main','.layout','.editor-panel','#database'].forEach(s=>{const e=document.querySelector(s);if(e)ro.observe(e)});
+  new MutationObserver(re).observe(document.body,{attributes:true,attributeFilter:['class']});
+  document.fonts?.ready?.then(re);addEventListener('load',re);
+  const base=enterTourStep;enterTourStep=function(){const r=base.apply(this,arguments);[0,60,250,600].forEach(t=>setTimeout(re,t));return r};
+  [0,300,1000].forEach(t=>setTimeout(re,t));
+})();
+
+/* 온보딩 힌트 단계 단축: '다음 힌트'와 '이전 힌트'를 한 단계로 합침
+   (모바일에서 2단계 힌트가 길어 말풍선이 화면 밖으로 밀리는 문제 해결) */
+(()=>{if(typeof TOUR_STEPS==='undefined')return;
+  const i=TOUR_STEPS.findIndex(s=>s.id==='hint-prev');if(i>=0)TOUR_STEPS.splice(i,1);
+  const n=TOUR_STEPS.find(s=>s.id==='hint-next');
+  if(n){n.title='힌트는 화살표로 넘겨요';n.text='힌트 아래 화살표로 다음·이전 힌트를 오갈 수 있어요. 숫자는 지금 보는 힌트와 전체 개수예요. 오른쪽 화살표를 눌러 보세요.'}
+})();
 
 </script></body></html>

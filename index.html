@@ -778,6 +778,9 @@ main>.gnb::after{border-bottom-color:#C9CCC5!important}
 @media(max-width:700px){body:not(.db-collapsed) #dbToggle{left:auto!important;right:10px!important;top:9px!important;background:transparent!important;border:0!important;box-shadow:none!important}body:not(.db-collapsed) #dbToggle::after,body:not(.db-collapsed) #dbToggle::before{display:none!important}}
 @media(min-width:701px){.gnb .acct-nudge{max-width:290px!important}}
 @media(min-width:701px){.gnb .account{flex-shrink:0!important}.gnb .acct-nudge{width:350px!important;max-width:350px!important;flex-shrink:0}}
+/* 연동 안내 말풍선 꼬리: 회전한 마름모 대신 박스와 딱 붙는 삼각형 */
+.acct-nudge::before{transform:none!important;width:14px!important;height:7px!important;top:-7px!important;left:18px!important;right:auto!important;background:#222421!important;clip-path:polygon(50% 0,100% 100%,0 100%)}
+@media(min-width:701px){.gnb .acct-nudge::before{width:7px!important;height:14px!important;top:50%!important;left:-7px!important;transform:translateY(-50%)!important;clip-path:polygon(0 50%,100% 0,100% 100%)}}
 </style></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><filter id="lcd-bleed" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.45 0.45" numOctaves="1" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -2.2" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="1" seed="3" result="w"/><feDisplacementMap in="broken" in2="w" scale="0.5" xChannelSelector="R" yChannelSelector="G" result="wob"/><feGaussianBlur in="wob" stdDeviation="0.2" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="wob"/></feMerge></filter><filter id="lcd-bleed-fine" x="-5%" y="-20%" width="110%" height="140%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9 0.9" numOctaves="1" seed="11" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -3.9" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feGaussianBlur in="broken" stdDeviation="0.2" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="broken"/></feMerge></filter></defs></svg>
 
 <div class="layout"><main><nav id="crumb" class="crumb" aria-label="현재 학습 위치"></nav><section class="problem"><div class="problem-heading"><div class="problem-title"><h1 id="taskTitle"></h1><button id="guideOpen" class="guide-button">GUIDE</button></div><div class="problem-tools"><span id="taskStatus"></span></div></div><p id="prompt"></p><div id="outputSpec" class="spec"></div></section>
@@ -2422,11 +2425,14 @@ const top=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(220,innerHeig
   };
   box.querySelector('.acct-out').onclick=async()=>{menu.hidden=true;push();try{await fb.auth.signOut()}catch{}};
   showNudge(true);
-  const away=e=>{if(nudge.hidden||nudgeAway)return;if(e&&e.target&&nudge.contains(e.target))return;nudgeAway=true;nudge.hidden=true};
+  const away=e=>{if(!matchMedia('(max-width:700px)').matches)return;if(nudge.hidden||nudgeAway)return;if(e&&e.target&&nudge.contains(e.target))return;nudgeAway=true;nudge.hidden=true};
   document.addEventListener('pointerdown',away,true);
   if(matchMedia('(max-width:700px)').matches)setTimeout(()=>away(),8000); // 모바일: 브레드크럼을 오래 가리지 않게 8초 뒤 자동으로 접힘addEventListener('scroll',()=>away(),{passive:true});
   // 이미 로그인한 적이 있으면 조용히 SDK를 불러와 로그인 상태 복원
   try{if(Object.keys(localStorage).some(k=>k.startsWith('firebase:authUser:')))boot().catch(()=>{})}catch{}
+  // 온보딩 중에는 말풍선을 숨기고, 온보딩이 끝나면(완료·건너뛰기) 연동 안내를 다시 보여 줌
+  if(typeof finishOnboarding==='function'){const f0=finishOnboarding;finishOnboarding=function(){const r=f0.apply(this,arguments);showNudge(!user);
+    if(!nudge.hidden&&matchMedia('(max-width:700px)').matches)setTimeout(()=>away(),8000);return r}}
   window.__sqltAuth={boot,onUser,merge,local};
 })();
 
@@ -2461,6 +2467,29 @@ const top=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(220,innerHeig
     if(acc.getBoundingClientRect().width+chip.getBoundingClientRect().width+24>inner)g.classList.add('gnb-tight')};
   new ResizeObserver(fit).observe(g);const acc=g.querySelector('.account');if(acc)new MutationObserver(fit).observe(acc,{subtree:true,attributes:true,attributeFilter:['hidden']});
   addEventListener('resize',fit);fit();
+})();
+
+/* 개념 메모(포스트잇) 위치 복원
+   원인 1: 온보딩의 '개념 메모' 단계가 메모를 (24,80)으로 옮기고 드래그 연습 위치까지 저장해서,
+          온보딩을 마치거나 건너뛴 뒤에도 메모가 화면 가운데(입력창 위)에 남아 있었음
+   원인 2: 모바일에서 가이드·문법 사전·DB 패널을 열면 본문을 position:fixed로 잠그는데,
+          닫은 뒤 메모(고정 위치)와 테두리(필터가 걸린 ::after)가 다시 계산·다시 그려지지 않아 어긋나 보였음 */
+(()=>{if(typeof startOnboarding!=='function'||typeof finishOnboarding!=='function')return;
+  const note=document.getElementById('conceptNote');
+  let before;   // 온보딩 시작 전 메모 위치(null=기본 자리)
+  const s0=startOnboarding;startOnboarding=function(){before=(typeof notePosition!=='undefined'&&notePosition)?{...notePosition}:null;return s0.apply(this,arguments)};
+  if(typeof onboarding!=='undefined'&&onboarding.active&&before===undefined)before=null; // 첫 방문: 로드 시 이미 시작됨 → 기본 자리
+  const f0=finishOnboarding;finishOnboarding=function(){const r=f0.apply(this,arguments);
+    try{notePosition=before===undefined?null:before;positionConceptNote();if(typeof save==='function')save()}catch{}
+    refresh();return r};
+  // 다시 그리기: 위치 재계산 + 테두리 레이어 강제 리페인트
+  function refresh(){requestAnimationFrame(()=>{try{positionConceptNote()}catch{}
+    note.style.transform='translateZ(0)';void note.offsetWidth;requestAnimationFrame(()=>{note.style.transform=''})})}
+  let wasLocked=false;
+  new MutationObserver(()=>{const locked=document.body.classList.contains('mobile-overlay-locked');if(wasLocked&&!locked){refresh();setTimeout(refresh,120);setTimeout(refresh,400)}wasLocked=locked}).observe(document.body,{attributes:true,attributeFilter:['class']});
+  ['guide','sqlLookup'].forEach(id=>{const d=document.getElementById(id);if(d)d.addEventListener('close',refresh)});
+  window.visualViewport?.addEventListener('resize',refresh);window.visualViewport?.addEventListener('scroll',refresh);
+  addEventListener('orientationchange',()=>setTimeout(refresh,300));addEventListener('pageshow',refresh);
 })();
 
 </script></body></html>

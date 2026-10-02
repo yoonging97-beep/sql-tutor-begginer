@@ -781,6 +781,14 @@ main>.gnb::after{border-bottom-color:#C9CCC5!important}
 /* 연동 안내 말풍선 꼬리: 회전한 마름모 대신 박스와 딱 붙는 삼각형 */
 .acct-nudge::before{transform:none!important;width:14px!important;height:7px!important;top:-7px!important;left:18px!important;right:auto!important;background:#222421!important;clip-path:polygon(50% 0,100% 100%,0 100%)}
 @media(min-width:701px){.gnb .acct-nudge::before{width:7px!important;height:14px!important;top:50%!important;left:-7px!important;transform:translateY(-50%)!important;clip-path:polygon(0 50%,100% 0,100% 100%)}}
+
+/* 모바일 연동 안내: 위에 떠서 브레드크럼을 가리지 않도록 GNB 아래 줄에 자리 잡음(사용자가 X로 닫을 때만 사라짐) */
+@media(max-width:700px){
+  main>.gnb{flex-wrap:wrap;height:auto!important;min-height:46px}
+  .gnb .account{display:contents!important}
+  .gnb .acct-login{order:1}.gnb .progress-chip{order:2}.gnb .acct-user{order:1}
+  .gnb .acct-nudge{order:3;position:relative!important;top:auto!important;left:auto!important;right:auto!important;width:100%!important;max-width:none!important;margin:4px 0 8px!important}
+}
 </style></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><filter id="lcd-bleed" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.45 0.45" numOctaves="1" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -2.2" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="1" seed="3" result="w"/><feDisplacementMap in="broken" in2="w" scale="0.5" xChannelSelector="R" yChannelSelector="G" result="wob"/><feGaussianBlur in="wob" stdDeviation="0.2" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="wob"/></feMerge></filter><filter id="lcd-bleed-fine" x="-5%" y="-20%" width="110%" height="140%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9 0.9" numOctaves="1" seed="11" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  9 0 0 0 -3.9" result="gap"/><feComposite in="SourceGraphic" in2="gap" operator="in" result="broken"/><feGaussianBlur in="broken" stdDeviation="0.2" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="broken"/></feMerge></filter></defs></svg>
 
 <div class="layout"><main><nav id="crumb" class="crumb" aria-label="현재 학습 위치"></nav><section class="problem"><div class="problem-heading"><div class="problem-title"><h1 id="taskTitle"></h1><button id="guideOpen" class="guide-button">GUIDE</button></div><div class="problem-tools"><span id="taskStatus"></span></div></div><p id="prompt"></p><div id="outputSpec" class="spec"></div></section>
@@ -2425,14 +2433,10 @@ const top=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(220,innerHeig
   };
   box.querySelector('.acct-out').onclick=async()=>{menu.hidden=true;push();try{await fb.auth.signOut()}catch{}};
   showNudge(true);
-  const away=e=>{if(!matchMedia('(max-width:700px)').matches)return;if(nudge.hidden||nudgeAway)return;if(e&&e.target&&nudge.contains(e.target))return;nudgeAway=true;nudge.hidden=true};
-  document.addEventListener('pointerdown',away,true);
-  if(matchMedia('(max-width:700px)').matches)setTimeout(()=>away(),8000); // 모바일: 브레드크럼을 오래 가리지 않게 8초 뒤 자동으로 접힘addEventListener('scroll',()=>away(),{passive:true});
   // 이미 로그인한 적이 있으면 조용히 SDK를 불러와 로그인 상태 복원
   try{if(Object.keys(localStorage).some(k=>k.startsWith('firebase:authUser:')))boot().catch(()=>{})}catch{}
   // 온보딩 중에는 말풍선을 숨기고, 온보딩이 끝나면(완료·건너뛰기) 연동 안내를 다시 보여 줌
-  if(typeof finishOnboarding==='function'){const f0=finishOnboarding;finishOnboarding=function(){const r=f0.apply(this,arguments);showNudge(!user);
-    if(!nudge.hidden&&matchMedia('(max-width:700px)').matches)setTimeout(()=>away(),8000);return r}}
+  if(typeof finishOnboarding==='function'){const f0=finishOnboarding;finishOnboarding=function(){const r=f0.apply(this,arguments);showNudge(!user);return r}}
   window.__sqltAuth={boot,onUser,merge,local};
 })();
 
@@ -2490,6 +2494,18 @@ const top=L.getBoundingClientRect().top;L.style.maxHeight=Math.max(220,innerHeig
   ['guide','sqlLookup'].forEach(id=>{const d=document.getElementById(id);if(d)d.addEventListener('close',refresh)});
   window.visualViewport?.addEventListener('resize',refresh);window.visualViewport?.addEventListener('scroll',refresh);
   addEventListener('orientationchange',()=>setTimeout(refresh,300));addEventListener('pageshow',refresh);
+})();
+
+/* 모바일: 접힌 데이터베이스 버튼을 항상 브레드크럼 줄 높이에 맞춤(GNB 아래 안내가 있어도 겹치지 않게) */
+(()=>{const t=document.getElementById('dbToggle'),cr=document.querySelector('main>.crumb');if(!t||!cr)return;
+  const m=matchMedia('(max-width:700px)');
+  const fit=()=>{if(!m.matches||!document.body.classList.contains('db-collapsed')){t.style.removeProperty('top');return}
+    const r=cr.getBoundingClientRect();if(!r.height){t.style.removeProperty('top');return}
+    t.style.setProperty('top',Math.max(8,Math.round(r.top+(r.height-t.offsetHeight)/2))+'px','important')};
+  addEventListener('scroll',fit,{passive:true});addEventListener('resize',fit);m.addEventListener?.('change',fit);
+  new ResizeObserver(fit).observe(document.querySelector('main'));new MutationObserver(fit).observe(document.body,{attributes:true,attributeFilter:['class']});
+  const nd=document.querySelector('.acct-nudge');if(nd)new MutationObserver(fit).observe(nd,{attributes:true,attributeFilter:['hidden']});
+  fit();setTimeout(fit,300);
 })();
 
 </script></body></html>
